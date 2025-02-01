@@ -6,7 +6,8 @@ set schema 'chatator';
 create table client(
 	client_id varchar primary key,
 	api_key varchar,
-	status varchar
+	status varchar,
+	banni boolean
 );
 
 create table conversation(
@@ -33,9 +34,9 @@ create table message(
 );
 
 insert into chatator.client(client_id, api_key, status) 
-	values('Co-0001', 'KzGF7', 'administrateur'),
-	('Co-0002', 'wxBmr', 'professionnel'),
-	('Co-0003', 'IKpAt', 'client');
+	values('Co-0001', 'KzGF7', 'administrateur', false),
+	('Co-0002', 'wxBmr', 'professionnel', false),
+	('Co-0003', 'IKpAt', 'client', false);
 
 insert into chatator.conversation(client_id_1, client_id_2, bloque, date_deblocage)
 	values('Co-0001', 'Co-0002', false, NULL),

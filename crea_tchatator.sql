@@ -33,7 +33,7 @@ create table message(
 
 );
 
-insert into chatator.client(client_id, api_key, status) 
+insert into chatator.client(client_id, api_key, status, banni) 
 	values('Co-0001', 'KzGF7', 'administrateur', false),
 	('Co-0002', 'wxBmr', 'professionnel', false),
 	('Co-0003', 'IKpAt', 'client', false);

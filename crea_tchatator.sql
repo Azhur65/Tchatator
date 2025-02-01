@@ -4,14 +4,14 @@ create schema chatator;
 set schema 'chatator';
 
 create table client(
-	client_id serial primary key,
+	client_id varchar primary key,
 	api_key varchar,
 	status varchar
 );
 
 create table conversation(
-	client_id_1 int,
-	client_id_2 int,
+	client_id_1 varchar,
+	client_id_2 varchar,
 	bloque boolean,
 	date_deblocage timestamp,
 	constraint conversation_pk primary key (client_id_1,client_id_2),
@@ -22,8 +22,8 @@ create table conversation(
 create table message(
 	message_id serial primary key,
 	message varchar(1000),
-	envoyeur int,
-	receveur int,
+	envoyeur varchar,
+	receveur varchar,
 	date timestamp,
 	modifie boolean,
 	date_modification date,
@@ -31,3 +31,13 @@ create table message(
 	constraint message_fk_2 foreign key (receveur) references client(client_id)
 
 );
+
+insert into chatator.client(client_id, api_key, status) 
+	values('Co-0001', 'KzGF7', 'administrateur'),
+	('Co-0002', 'wxBmr', 'professionnel'),
+	('Co-0003', 'IKpAt', 'client');
+
+insert into chatator.conversation(client_id_1, client_id_2, bloque, date_deblocage)
+	values('Co-0001', 'Co-0002', false, NULL),
+	('Co-0001', 'Co-0003', false, NULL),
+	('Co-0003', 'Co-0002', false, NULL);

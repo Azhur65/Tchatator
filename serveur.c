@@ -23,6 +23,9 @@ char* insert_message_query(int src, int dest, char* msg);
 //checks if the user that sent the request is blocked by the user specified by dest
 bool is_blocked(PGconn* dbConn, int src, int dest);
 
+//block a conversation beetwin 2 users
+void block(PGconn* dbConn, char* src, char* dest);
+
 int main() {
     int sock, ret, cnx;
     int size;
@@ -38,7 +41,7 @@ int main() {
         PQfinish(dbConn);
         exit(1);
     }
-
+    /*
     // Créer un socket
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
@@ -118,7 +121,9 @@ int main() {
 
     // Fermer la connexion et le socket
     close(cnx);
-    close(sock);
+    close(sock);*/
+
+    block(dbConn, "Co-0001", "Co-0002");
     PQfinish(dbConn);
 
     return EXIT_SUCCESS;
@@ -190,4 +195,31 @@ bool is_blocked(PGconn* dbConn, int src, int dest) {
 
 
     return blocked;
+}
+
+void block(PGconn* dbConn, char* src, char* dest) {
+    const char* paramValues[2];
+    paramValues[0] = src;
+    paramValues[1] = dest;
+
+    PGresult* res = PQexecParams(
+        dbConn,
+        "UPDATE chatator.conversation SET bloque = true "
+        "WHERE (client_id_1 = $1 AND client_id_2 = $2) "
+        "OR (client_id_2 = $1 AND client_id_1 = $2);",
+        2,               // number of parameters
+        NULL,            // parameter types (let PostgreSQL infer)
+        paramValues,     // parameter values
+        NULL,            // parameter lengths
+        NULL,            // parameter formats (text/binary)
+        0                // result format (0 for text)
+    );
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        printf("Error updating data: %s\n", PQerrorMessage(dbConn));
+    } else {
+        printf("Update successful. Block set to true.\n");
+    }
+
+    PQclear(res);
 }

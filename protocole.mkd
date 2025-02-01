@@ -1,0 +1,47 @@
+- **LOGIN** : <*api_key*> pour s'authentifier auprès du service <br>
+    Réponses possibles
+    - **201/OKC** : Accès client authorisé
+    - **202/OKP** : Accès professionel authorisé
+    - **203/OKA** : Accès administrateur authorisé
+    - **403/DENIED** : Accès refusé
+
+- **MSG** : \<*id_client*>,\<*message*> pour envoyer un message à une personne <br>
+    Réponses possibles 
+    - **200/OK** : Message envoyé
+    - **400/ERROR** : Le message n'a pas été envoyé
+    - **401/BLOCKED** : Le destinataire n'authorise pas les messages de votre part
+    - **402/LONG** : Le message est trop long
+    - **404/UNDEFINED** : L'identifiant du client est incorrect
+    - **405/SPAM** : Le message n'as pas été envoyé car trop de messages ont étés envoyés en peu de temps
+
+- **PULL** : permet de recevoir les messages non lus <br>
+    Réponses possibles
+    - **200/OK** : Tous les messages ont été reçus avec succès
+    - **400/ERROR** : Tous les messages n'ont pas pus être receptionnés
+
+- **HISTORY** : \<*id_client*> permet de recevoir un historique des messages avec un client <br>
+    Réponses possibles:
+    - **200/OK** : L'Historique à bien été reçu
+    - **400/ERROR** : L'Historique n'a pas pu être receptionné
+    - **404/UNDEFINED** : L'identifiant du client est incorrect
+
+- **MODIFY** : \<*id_message*>,\<*new_message*> permet de modifier un message envoyé
+    Réponses possibles:
+    - **200/OK** : Message modifié avec succès
+    - **400/ERROR** : Le message n'a pas été modifié
+    - **402/LONG** : Le nouveau message est trop long
+    - **404/UNDEFINED** : L'identifiant du message est incorrect
+
+- **BLOCK** : \<*id_client*> En tant que professionnel, permet de bloquer tous les messages provenant d'un client pendant 24 heures <br>
+    Réponses possibles
+    - **200/OK** : Messages bloqués entre le client et le professionel pendant 24 heures
+    - **400/ERROR** : Erreur sur le blocage des messages entre les clients
+    - **403/DENIED** : Vous n'avez pas accès à cette commande
+    - **404/UNDEFINED** : Un ou plusieurs identifiant sont incorrects
+
+- **BAN** : \<*id_client*> permet de bloquer definitivement tous les message provenant d'un client <br> 
+    Réponses possibles
+    - **200/OK** : Messages bloqués entre le client et le professionel définitivement
+    - **400/ERROR** : Erreur sur le banissement d'un client
+    - **403/DENIED** : Vous n'avez pas accès à cette commande
+    - **404/UNDEFINED** : L'identifiant du client n'existe pas

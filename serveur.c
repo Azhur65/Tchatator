@@ -41,7 +41,7 @@ int main() {
         PQfinish(dbConn);
         exit(1);
     }
-    /*
+
     // Créer un socket
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
@@ -121,9 +121,8 @@ int main() {
 
     // Fermer la connexion et le socket
     close(cnx);
-    close(sock);*/
+    close(sock);
 
-    block(dbConn, "Co-0001", "Co-0002");
     PQfinish(dbConn);
 
     return EXIT_SUCCESS;

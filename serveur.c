@@ -15,13 +15,13 @@
 const int MAX_MSG_SIZE = 1000;
 
 //sends the message msg to the user specified by dest
-char* send_message(PGconn* dbConn, int src, int dest, char* msg);
+char* send_message(PGconn* dbConn, char* src, char* dest, char* msg);
 
 //returns a query to send a message
-char* insert_message_query(int src, int dest, char* msg);
+PGresult* insert_message_query(PGconn* dbConn, char* src, char* dest, char* msg);
 
 //checks if the user that sent the request is blocked by the user specified by dest
-bool is_blocked(PGconn* dbConn, int src, int dest);
+bool is_blocked(PGconn* dbConn, char* src, char* dest);
 
 //block a conversation beetwin 2 users
 void block(PGconn* dbConn, char* src, char* dest);
@@ -41,7 +41,7 @@ int main() {
         PQfinish(dbConn);
         exit(1);
     }
-
+    /*
     // Créer un socket
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
@@ -121,85 +121,136 @@ int main() {
 
     // Fermer la connexion et le socket
     close(cnx);
-    close(sock);
+    close(sock);*/
+
+    //TEST
+    printf("block\n");
+    block(dbConn, "Co-0001", "Co-0002");
+
+    printf("send_message\n");
+    send_message(dbConn, "Co-0003", "Co-0002", "message de test");
 
     PQfinish(dbConn);
 
     return EXIT_SUCCESS;
 }
 
-char* send_message(PGconn* dbConn, int src, int dest, char* msg) {
+char* send_message(PGconn* dbConn, char* src, char* dest, char* msg) {
+
     char *ret;
-    //return codes and messages
+
     const char OK[] = "200/OK : Message envoyé";
     const char ERROR[] = "400/ERROR : Le message n'a pas été envoyé";
     const char BLOCKED[] = "401/BLOCKED : Le destinataire n'autorise pas les messages de votre part";
     const char LONG[] = "402/LONG : Le message est trop long";
     const char UNDEFINED[] = "404/UNDEFINED : L'identifiant du client est incorrect";
-    const char SPAM[] = "405/SPAM : Le message n'a pas été envoyé car trop de messages ont été envoyés en peu de temps";
 
-    //checks
     if (is_blocked(dbConn, src, dest)) {
-        ret = malloc(sizeof(BLOCKED));
+        ret = malloc(strlen(BLOCKED) + 1);
         strcpy(ret, BLOCKED);
         return ret;
     }
 
     if (strlen(msg) >= MAX_MSG_SIZE) {
-        ret = malloc(sizeof(LONG));
+        ret = malloc(strlen(LONG) + 1);
         strcpy(ret, LONG);
         return ret;
     }
 
-    //send to db
-    PGresult* res = PQexec(dbConn, insert_message_query(src, dest, msg));
-    char* error = PQresultErrorMessage(res);
-    if (strcmp(error, "") != 0) {
-        if (strstr(error, "message_fk_2") != NULL) {
-            ret = malloc(sizeof(UNDEFINED));
-            strcpy(ret, UNDEFINED);
-            return ret;
-        } else {
-            ret = malloc(sizeof(ERROR));
-            strcpy(ret, ERROR);
-            return ret;
+    // Call insert_message_query and store the result in res
+    PGresult* res = insert_message_query(dbConn, src, dest, msg);
+
+    // Check if there was an error inserting the message
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+    // Print the detailed error message for debugging
+    fprintf(stderr, "Error executing query: %s\n", PQerrorMessage(dbConn));
+    if (strstr(PQerrorMessage(dbConn), "message_fk_2") != NULL) {
+        ret = malloc(strlen(UNDEFINED) + 1);
+        strcpy(ret, UNDEFINED);
+    } else {
+        ret = malloc(strlen(ERROR) + 1);
+        strcpy(ret, ERROR);
+    }
+    PQclear(res);
+    return ret;
+}
+
+
+    // If everything went well, return the success message
+    ret = malloc(strlen(OK) + 1);
+    strcpy(ret, OK);
+    PQclear(res);
+    return ret;
+}
+
+PGresult* insert_message_query(PGconn* dbConn, char* src, char* dest, char* msg) {
+    const char* paramValues[4];
+    time_t currentTime = time(NULL);  // Get the current Unix timestamp
+    
+    // Convert the timestamp into a string to ensure it can be passed properly
+    char timestampStr[20];  // Buffer to hold the timestamp as a string
+    snprintf(timestampStr, sizeof(timestampStr), "%ld", (long)currentTime);
+    
+    paramValues[0] = msg;
+    paramValues[1] = src;
+    paramValues[2] = dest;
+    paramValues[3] = timestampStr;  // Pass the Unix timestamp as a string to the query
+
+    // Execute the query
+    PGresult* res = PQexecParams(
+        dbConn,
+        "INSERT INTO chatator.message(message, envoyeur, receveur, date, modifie) "
+        "VALUES($1, $2, $3, to_timestamp($4), false);",  // Use `to_timestamp()` to convert Unix timestamp to PostgreSQL timestamp
+        4,  // Number of parameters
+        NULL,  // Param descriptions
+        paramValues,  // The actual parameter values
+        NULL,  // Output columns
+        NULL,  // Output lengths
+        0  // Flags
+    );
+
+    return res;  // Return the result pointer for further handling
+}
+
+
+
+
+
+bool is_blocked(PGconn* dbConn, char* src, char* dest) {
+    bool blocked = false;
+    const char* paramValues[2] = { src, dest };
+    
+    PGresult* res = PQexecParams(
+        dbConn,
+        "SELECT bloque FROM chatator.conversation WHERE (client_id_1 = $1 AND client_id_2 = $2) "
+        "OR (client_id_2 = $1 AND client_id_1 = $2);",
+        2,
+        NULL,
+        paramValues,
+        NULL,
+        NULL,
+        0
+    );
+    
+    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+        if (strcmp(PQgetvalue(res, 0, 0), "t") == 0) {
+            blocked = true;
         }
     }
-
     PQclear(res);
-    ret = malloc(sizeof(OK));
-    strcpy(ret, OK);
-    return ret;
-}
-
-char* insert_message_query(int src, int dest, char* msg) {
-    char* ret;
-    char temp[2048];
-
-    char queryBase[] = "INSERT INTO chatator.message(message, envoyeur, receveur, date, modifie) VALUES(";
-    sprintf(temp, "%s, %d, %d, %li, false)", msg, src, dest, (long) time(NULL));
-    ret = malloc(sizeof(queryBase) + sizeof(char) * (strlen(temp) + 1));
-    ret = strcat(queryBase, temp);
-
-    return ret;
-}
-
-bool is_blocked(PGconn* dbConn, int src, int dest) {
-    bool blocked = false;
-    char query[4096];
-    
-    sprintf(query, "SELECT date_deblocage FROM chatator.conversation WHERE (client_id_1 = %d AND client_id_2 = %d) OR (client_id_2 = %d AND client_id_1 = %d)", src, dest, src, dest);
-    PGresult* res = PQexec(dbConn, query);
-    if (strstr(PQgetvalue(res, 0, 0), "true") != NULL) blocked = true;
-
-
     return blocked;
 }
 
+
 void block(PGconn* dbConn, char* src, char* dest) {
-    const char* paramValues[2];
+    const char* paramValues[3];
     paramValues[0] = src;
     paramValues[1] = dest;
+
+    // Get current timestamp as a string
+    char timestampStr[20];
+    snprintf(timestampStr, sizeof(timestampStr), "%ld", time(NULL));
+    paramValues[2] = timestampStr;
 
     PGresult* res = PQexecParams(
         dbConn,
@@ -215,10 +266,32 @@ void block(PGconn* dbConn, char* src, char* dest) {
     );
 
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        printf("Error updating data: %s\n", PQerrorMessage(dbConn));
+        printf("Error updating bloque: %s\n", PQerrorMessage(dbConn));
     } else {
         printf("Update successful. Block set to true.\n");
     }
 
     PQclear(res);
+
+    res = PQexecParams(
+        dbConn,
+        "UPDATE chatator.conversation SET date_deblocage = to_timestamp($3) "
+        "WHERE (client_id_1 = $1 AND client_id_2 = $2) "
+        "OR (client_id_2 = $1 AND client_id_1 = $2);",
+        3,               // number of parameters
+        NULL,            // parameter types (let PostgreSQL infer)
+        paramValues,     // parameter values
+        NULL,            // parameter lengths
+        NULL,            // parameter formats (text/binary)
+        0                // result format (0 for text)
+    );
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        printf("Error updating date_deblocage: %s\n", PQerrorMessage(dbConn));
+    } else {
+        printf("Update successful. Timestamp set to now.\n");
+    }
+
+    PQclear(res);
 }
+

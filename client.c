@@ -33,37 +33,31 @@ int main() {
     int id_client = 0;
     int reponse;
     
-    // Créer un socket
+// Create socket
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
-        perror("Erreur lors de la création du socket");
+        perror("Error creating socket");
         exit(1);
     }
 
-    // Configurer l'adresse du serveur
+    // Server address configuration
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(8080);  // Port 8080
     if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
-        perror("inet_pton échoué");
+        perror("inet_pton failed");
         close(sock);
         exit(1);
     }
 
-    // Connexion au serveur
+    // Connect to the server
     ret = connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
     if (ret < 0) {
-        perror("Erreur lors de la connexion au serveur");
+        perror("Error connecting to server");
         close(sock);
         exit(1);
     }
 
-    // Écouter les connexions entrantes
-    ret = listen(sock, 1);
-    if (ret < 0) {
-        perror("Erreur lors de l'écoute du socket");
-        close(sock);
-        exit(1);
-    }
+    printf("Connected to server...\n");
 
     // Communication bidirectionnelle
     while (1) {
@@ -108,8 +102,10 @@ int main() {
 int menu(){
     int reponse;
 
-    printf("1 : LOGIN\n2 : MSG\n3 : PULL\n4 : HISTORY\n5 : MODIFY\n6 : BLOCK\n7 : TIMEOUT\n8 : BAN\nQue voulez vous faire ? : ");
-    scanf("%d",&reponse);
+    printf("1 : LOGIN\n2 : MSG\n3 : PULL\n4 : HISTORY\n5 : MODIFY\n6 : BLOCK\n7 : TIMEOUT\n8 : BAN\nQue voulez vous faire ? : \n");
+    scanf(" %d",&reponse);
+    fflush(stdin);
+    printf("check");
     return reponse;
 }
 

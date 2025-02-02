@@ -1,8 +1,8 @@
 - **LOGIN** : <*api_key*> pour s'authentifier auprès du service <br>
     Réponses possibles
-    - **201/OKC** : Accès client authorisé
-    - **202/OKP** : Accès professionel authorisé
-    - **203/OKA** : Accès administrateur authorisé
+    - **201/OKC** : Accès client authorisé, <*id_client*>
+    - **202/OKP** : Accès professionel authorisé <*id_client*>
+    - **203/OKA** : Accès administrateur authorisé <*id_client*>
     - **403/DENIED** : Accès refusé
 
 - **MSG** : \<*id_client*>,\<*message*> pour envoyer un message à une personne <br>

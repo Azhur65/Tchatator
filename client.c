@@ -97,13 +97,13 @@ int main() {
             }
 
             if(strcmp(tokenc, "LOGIN")){
-                if(strcmp(ret, "201/OKC")){
+                if(strcmp(buffer, "201/OKC")){
                     printf("Accès client authorisé");
 
-                }else if(strcmp(ret,"202/OKP")){
+                }else if(strcmp(buffer,"202/OKP")){
                     printf("Accès professionnel authorisé");
 
-                }else if(strcmp(ret,"203/OKA")){
+                }else if(strcmp(buffer,"203/OKA")){
                     printf("accès administrateur authorisé");
 
                 }else{
@@ -111,19 +111,19 @@ int main() {
                 }
 
             }else if(strcmp(tokenc,"MSG")){
-                if(strcmp(ret,"200/OK")){
+                if(strcmp(buffer,"200/OK")){
                     printf("message envoyé\n");
 
-                }else if(strcmp(ret,"401/BLOCKED")){
+                }else if(strcmp(buffer,"401/BLOCKED")){
                     printf("le destinataire n'authorise pas les messages de votre part\n");
 
-                }else if(strcmp(ret,"402/LONG")){
+                }else if(strcmp(buffer,"402/LONG")){
                     printf("le message est troplong\n");
 
-                }else if(strcmp(ret,"404/UNDEFINED")){
+                }else if(strcmp(buffer,"404/UNDEFINED")){
                     printf("L'identifiant du client est incorrect\n");
 
-                }else if(strcmp(ret,"405/SPAM")){
+                }else if(strcmp(buffer,"405/SPAM")){
                     printf("Trop de messages ont été envoyés\n");
 
                 }else{
@@ -131,33 +131,33 @@ int main() {
 
                 }
             }else if(strcmp(tokenc,"PULL")){
-                if(strcmp(ret,"400/ERROR") || ret == NULL){
+                if(strcmp(buffer,"400/ERROR") || buffer == NULL){
                     printf("Tous les messages n'ont pas pu être réceptionné\n");
 
                 }else{
-                    printf("%s\n",ret);
+                    printf("%s\n",buffer);
                 }
 
             }else if(strcmp(tokenc,"HISTORY")){
-                if(strcmp(ret,"404/UNDEFINED")){
+                if(strcmp(buffer,"404/UNDEFINED")){
                     printf("L'identifiant du est incorrect\n");
 
-                }else if(strcmp(ret,"400/ERROR" || ret == NULL)){
+                }else if(strcmp(buffer,"400/ERROR") || buffer == NULL){
                     printf("L'historique n'a pas être receptionner\n");
 
                 }else{
-                    printf("%s\n",ret);
+                    printf("%s\n",buffer);
 
                 }
 
             }else if(strcmp(tokenc,"MODIFY")){
-                if(strcmp(ret,"200/OK")){
+                if(strcmp(buffer,"200/OK")){
                     printf("Messaeg modifié avec succès\n");
 
-                }else if(strcmp(ret,"402/LONG")){
+                }else if(strcmp(buffer,"402/LONG")){
                     printf("le message est trop long\n");
 
-                }else if(strcmp(ret,"404/UNDEFINED")){
+                }else if(strcmp(buffer,"404/UNDEFINED")){
                     printf("L'identifiant du message est incorrect\n");
 
                 }else{
@@ -166,13 +166,13 @@ int main() {
                 }
 
             }else if(strcmp(tokenc,"BLOCK")){
-                if(strcmp(ret,"200/OK")){
+                if(strcmp(buffer,"200/OK")){
                     printf("messages blockés pendant 24 heures\n");
 
-                }else if(strcmp(ret,"403/DENIED")){
+                }else if(strcmp(buffer,"403/DENIED")){
                     printf("vous n'avez pas accès à cette commande\n");
 
-                }else if(strcmp(ret,"404/UNDEFINED")){
+                }else if(strcmp(buffer,"404/UNDEFINED")){
                     printf("identifiants client incorrect\n");
 
                 }else{
@@ -181,13 +181,13 @@ int main() {
                 }
 
             }else if(strcmp(tokenc,"TIMEOUT")){
-                if(strcmp(ret,"200/OK")){
+                if(strcmp(buffer,"200/OK")){
                     printf("messages blockés pendant 24 heures\n");
 
-                }else if(strcmp(ret,"403/DENIED")){
+                }else if(strcmp(buffer,"403/DENIED")){
                     printf("vous n'avez pas accès à cette commande\n");
 
-                }else if(strcmp(ret,"404/UNDEFINED")){
+                }else if(strcmp(buffer,"404/UNDEFINED")){
                     printf("identifiants client incorrect\n");
 
                 }else{
@@ -196,13 +196,13 @@ int main() {
                 }
 
             }else if(strcmp(tokenc,"BAN")){
-                if(strcmp(ret,"200/OK")){
+                if(strcmp(buffer,"200/OK")){
                     printf("messages blockés indefiniment\n");
 
-                }else if(strcmp(ret,"403/DENIED")){
+                }else if(strcmp(buffer,"403/DENIED")){
                     printf("vous n'avez pas accès à cette commande\n");
 
-                }else if(strcmp(ret,"404/UNDEFINED")){
+                }else if(strcmp(buffer,"404/UNDEFINED")){
                     printf("identifiants client incorrect\n");
 
                 }else{

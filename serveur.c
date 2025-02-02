@@ -26,6 +26,15 @@ bool is_blocked(PGconn* dbConn, char* src, char* dest);
 //block a conversation beetwin 2 users
 void block(PGconn* dbConn, char* src, char* dest);
 
+//checks client api key and tells what type of account it is
+char* login(PGconn* dbConn, char* api_key);
+
+char* pull_messages(PGconn* dbConn, char* client_id);
+char* get_history(PGconn* dbConn, char* client_id, char* target_id, char* last_message_id, int limit);
+char* modify_message(PGconn* dbConn, char* message_id, char* new_message);
+char* timeout_user(PGconn* dbConn, char* admin_id, char* client_id);
+char* ban_user(PGconn* dbConn, char* admin_id, char* client_id);
+
 int main() {
     int sock, ret, cnx;
     int size;
@@ -136,7 +145,6 @@ int main() {
 }
 
 char* send_message(PGconn* dbConn, char* src, char* dest, char* msg) {
-
     char *ret;
 
     const char OK[] = "200/OK : Message envoyé";
@@ -145,38 +153,36 @@ char* send_message(PGconn* dbConn, char* src, char* dest, char* msg) {
     const char LONG[] = "402/LONG : Le message est trop long";
     const char UNDEFINED[] = "404/UNDEFINED : L'identifiant du client est incorrect";
 
+    // Vérifier si la conversation est bloquée (avec déblocage automatique si nécessaire)
     if (is_blocked(dbConn, src, dest)) {
         ret = malloc(strlen(BLOCKED) + 1);
         strcpy(ret, BLOCKED);
         return ret;
     }
 
+    // Le reste de la logique d'envoi de message reste inchangé
     if (strlen(msg) >= MAX_MSG_SIZE) {
         ret = malloc(strlen(LONG) + 1);
         strcpy(ret, LONG);
         return ret;
     }
 
-    // Call insert_message_query and store the result in res
+    // Envoyer le message
     PGresult* res = insert_message_query(dbConn, src, dest, msg);
-
-    // Check if there was an error inserting the message
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    // Print the detailed error message for debugging
-    fprintf(stderr, "Error executing query: %s\n", PQerrorMessage(dbConn));
-    if (strstr(PQerrorMessage(dbConn), "message_fk_2") != NULL) {
-        ret = malloc(strlen(UNDEFINED) + 1);
-        strcpy(ret, UNDEFINED);
-    } else {
-        ret = malloc(strlen(ERROR) + 1);
-        strcpy(ret, ERROR);
+        fprintf(stderr, "Erreur lors de l'envoi du message : %s\n", PQerrorMessage(dbConn));
+        if (strstr(PQerrorMessage(dbConn), "message_fk_2") != NULL) {
+            ret = malloc(strlen(UNDEFINED) + 1);
+            strcpy(ret, UNDEFINED);
+        } else {
+            ret = malloc(strlen(ERROR) + 1);
+            strcpy(ret, ERROR);
+        }
+        PQclear(res);
+        return ret;
     }
-    PQclear(res);
-    return ret;
-}
 
-
-    // If everything went well, return the success message
+    // Message envoyé avec succès
     ret = malloc(strlen(OK) + 1);
     strcpy(ret, OK);
     PQclear(res);
@@ -212,35 +218,56 @@ PGresult* insert_message_query(PGconn* dbConn, char* src, char* dest, char* msg)
     return res;  // Return the result pointer for further handling
 }
 
-
-
-
-
 bool is_blocked(PGconn* dbConn, char* src, char* dest) {
     bool blocked = false;
     const char* paramValues[2] = { src, dest };
-    
+
+    // Requête pour vérifier si la conversation est bloquée et si le blocage a expiré
     PGresult* res = PQexecParams(
         dbConn,
-        "SELECT bloque FROM chatator.conversation WHERE (client_id_1 = $1 AND client_id_2 = $2) "
+        "SELECT bloque, date_bloquage FROM chatator.conversation "
+        "WHERE (client_id_1 = $1 AND client_id_2 = $2) "
         "OR (client_id_2 = $1 AND client_id_1 = $2);",
-        2,
-        NULL,
-        paramValues,
-        NULL,
-        NULL,
-        0
+        2, NULL, paramValues, NULL, NULL, 0
     );
-    
+
     if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+        // Vérifier si la conversation est bloquée
         if (strcmp(PQgetvalue(res, 0, 0), "t") == 0) {
-            blocked = true;
+            // Récupérer la date de blocage
+            char* date_bloquage_str = PQgetvalue(res, 0, 1);
+            time_t date_bloquage = (time_t)atol(date_bloquage_str); // Convertir en timestamp
+            time_t now = time(NULL); // Date actuelle
+
+            // Vérifier si le blocage a expiré (plus de 24 heures)
+            if (difftime(now, date_bloquage) >= 24 * 60 * 60) {
+                // Débloquer la conversation
+                const char* unblockParams[2] = { src, dest };
+                PGresult* unblockRes = PQexecParams(
+                    dbConn,
+                    "UPDATE chatator.conversation SET bloque = false, date_bloquage = NULL "
+                    "WHERE (client_id_1 = $1 AND client_id_2 = $2) "
+                    "OR (client_id_2 = $1 AND client_id_1 = $2);",
+                    2, NULL, unblockParams, NULL, NULL, 0
+                );
+
+                if (PQresultStatus(unblockRes) != PGRES_COMMAND_OK) {
+                    printf("Erreur lors du déblocage de la conversation : %s\n", PQerrorMessage(dbConn));
+                } else {
+                    printf("Conversation débloquée automatiquement.\n");
+                }
+
+                PQclear(unblockRes);
+            } else {
+                // Le blocage est toujours actif
+                blocked = true;
+            }
         }
     }
+
     PQclear(res);
     return blocked;
 }
-
 
 void block(PGconn* dbConn, char* src, char* dest) {
     const char* paramValues[3];
@@ -295,3 +322,267 @@ void block(PGconn* dbConn, char* src, char* dest) {
     PQclear(res);
 }
 
+char* login(PGconn* dbConn, char* api_key) {
+    char *ret;
+    const char OKC[] = "201/OKC : Accès client authorisé";
+    const char OKP[] = "202/OKP : Accès professionel authorisé";
+    const char OKA[] = "203/OKA : Accès administrateur authorisé";
+    const char DENIED[] = "403/DENIED : Accès refusé";
+
+    const char* paramValues[1] = { api_key };
+    PGresult* res = PQexecParams(
+        dbConn,
+        "SELECT status FROM chatator.client WHERE api_key = $1",
+        1, NULL, paramValues, NULL, NULL, 0
+    );
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        ret = malloc(strlen(DENIED) + 1);
+        strcpy(ret, DENIED);
+    } else {
+        char* status = PQgetvalue(res, 0, 0);
+        if (strcmp(status, "client") == 0) {
+            ret = malloc(strlen(OKC) + 1);
+            strcpy(ret, OKC);
+        } else if (strcmp(status, "professionnel") == 0) {
+            ret = malloc(strlen(OKP) + 1);
+            strcpy(ret, OKP);
+        } else if (strcmp(status, "administrateur") == 0) {
+            ret = malloc(strlen(OKA) + 1);
+            strcpy(ret, OKA);
+        } else {
+            ret = malloc(strlen(DENIED) + 1);
+            strcpy(ret, DENIED);
+        }
+    }
+
+    PQclear(res);
+    return ret;
+}
+
+char* pull_messages(PGconn* dbConn, char* client_id) {
+    char *ret;
+    const char OK[] = "200/OK : Tous les messages ont été reçus avec succès";
+    const char ERROR[] = "400/ERROR : Tous les messages n'ont pas pus être receptionnés";
+
+    const char* paramValues[1] = { client_id };
+    PGresult* res = PQexecParams(
+        dbConn,
+        "SELECT message FROM chatator.message WHERE receveur = $1 AND lu = false",
+        1, NULL, paramValues, NULL, NULL, 0
+    );
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        ret = malloc(strlen(ERROR) + 1);
+        strcpy(ret, ERROR);
+    } else {
+        ret = malloc(strlen(OK) + 1);
+        strcpy(ret, OK);
+    }
+
+    PQclear(res);
+    return ret;
+}
+
+char* get_history(PGconn* dbConn, char* client_id, char* target_id, char* last_message_id, int limit) {
+    char *ret;
+    const char OK[] = "200/OK : L'Historique à bien été reçu";
+    const char ERROR[] = "400/ERROR : L'Historique n'a pas pu être receptionné";
+    const char UNDEFINED[] = "404/UNDEFINED : L'identifiant du client est incorrect";
+
+    // Vérifier si les identifiants des clients existent
+    const char* paramValues[2] = { client_id, target_id };
+    PGresult* res = PQexecParams(
+        dbConn,
+        "SELECT client_id FROM chatator.client WHERE client_id = $1 OR client_id = $2",
+        2, NULL, paramValues, NULL, NULL, 0
+    );
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) < 2) {
+        ret = malloc(strlen(UNDEFINED) + 1);
+        strcpy(ret, UNDEFINED);
+        PQclear(res);
+        return ret;
+    }
+    PQclear(res);
+
+    // Construire la requête SQL en fonction de last_message_id
+    char query[4096];
+    if (last_message_id == NULL || strcmp(last_message_id, "") == 0) {
+        // Récupérer les derniers messages
+        sprintf(query,
+            "SELECT message_id, message, envoyeur, receveur, date, modifie "
+            "FROM chatator.message "
+            "WHERE (envoyeur = $1 AND receveur = $2) OR (envoyeur = $2 AND receveur = $1) "
+            "ORDER BY date DESC "
+            "LIMIT %d", limit);
+    } else {
+        // Récupérer les messages précédant last_message_id
+        sprintf(query,
+            "SELECT message_id, message, envoyeur, receveur, date, modifie "
+            "FROM chatator.message "
+            "WHERE ((envoyeur = $1 AND receveur = $2) OR (envoyeur = $2 AND receveur = $1)) "
+            "AND message_id < %s "
+            "ORDER BY date DESC "
+            "LIMIT %d", last_message_id, limit);
+    }
+
+    // Exécuter la requête
+    res = PQexecParams(
+        dbConn,
+        query,
+        2, NULL, paramValues, NULL, NULL, 0
+    );
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        ret = malloc(strlen(ERROR) + 1);
+        strcpy(ret, ERROR);
+    } else if (PQntuples(res) == 0) {
+        ret = malloc(strlen(UNDEFINED) + 1);
+        strcpy(ret, UNDEFINED);
+    } else {
+        // Construire la réponse avec les messages
+        char response[BUFFER_SIZE];
+        strcpy(response, OK);
+        strcat(response, "\n");
+
+        for (int i = 0; i < PQntuples(res); i++) {
+            char message_line[512];
+            sprintf(message_line, "Message ID: %s, From: %s, To: %s, Date: %s, Modified: %s, Content: %s\n",
+                PQgetvalue(res, i, 0),  // message_id
+                PQgetvalue(res, i, 2),  // envoyeur
+                PQgetvalue(res, i, 3),  // receveur
+                PQgetvalue(res, i, 4),  // date
+                PQgetvalue(res, i, 5),  // modifie
+                PQgetvalue(res, i, 1)   // message
+            );
+            strcat(response, message_line);
+        }
+
+        ret = malloc(strlen(response) + 1);
+        strcpy(ret, response);
+    }
+
+    PQclear(res);
+    return ret;
+}
+
+char* modify_message(PGconn* dbConn, char* message_id, char* new_message) {
+    char *ret;
+    const char OK[] = "200/OK : Message modifié avec succès";
+    const char ERROR[] = "400/ERROR : Le message n'a pas été modifié";
+    const char LONG[] = "402/LONG : Le nouveau message est trop long";
+    const char UNDEFINED[] = "404/UNDEFINED : L'identifiant du message est incorrect";
+
+    if (strlen(new_message) >= MAX_MSG_SIZE) {
+        ret = malloc(strlen(LONG) + 1);
+        strcpy(ret, LONG);
+        return ret;
+    }
+
+    const char* paramValues[2] = { new_message, message_id };
+    PGresult* res = PQexecParams(
+        dbConn,
+        "UPDATE chatator.message SET message = $1, modifie = true WHERE message_id = $2",
+        2, NULL, paramValues, NULL, NULL, 0
+    );
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        ret = malloc(strlen(ERROR) + 1);
+        strcpy(ret, ERROR);
+    } else if (PQntuples(res) == 0) {
+        ret = malloc(strlen(UNDEFINED) + 1);
+        strcpy(ret, UNDEFINED);
+    } else {
+        ret = malloc(strlen(OK) + 1);
+        strcpy(ret, OK);
+    }
+
+    PQclear(res);
+    return ret;
+}
+
+char* timeout_user(PGconn* dbConn, char* admin_id, char* client_id) {
+    char *ret;
+    const char OK[] = "200/OK : Messages du client bloqués pendant 24 heures";
+    const char ERROR[] = "400/ERROR : Erreur sur le blocage des messages en provenance du client";
+    const char DENIED[] = "403/DENIED : Vous n'avez pas accès à cette commande";
+    const char UNDEFINED[] = "404/UNDEFINED : Un ou plusieurs identifiant sont incorrects";
+
+    // Vérifier si l'utilisateur est un administrateur
+    const char* paramValues[1] = { admin_id };
+    PGresult* res = PQexecParams(
+        dbConn,
+        "SELECT status FROM chatator.client WHERE client_id = $1",
+        1, NULL, paramValues, NULL, NULL, 0
+    );
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0 || strcmp(PQgetvalue(res, 0, 0), "administrateur") != 0) {
+        ret = malloc(strlen(DENIED) + 1);
+        strcpy(ret, DENIED);
+        PQclear(res);
+        return ret;
+    }
+
+    // Bloquer le client pendant 24 heures
+    const char* blockParams[2] = { client_id, admin_id };
+    res = PQexecParams(
+        dbConn,
+        "UPDATE chatator.conversation SET bloque = true, date_deblocage = NOW() + INTERVAL '24 hours' WHERE (client_id_1 = $1 OR client_id_2 = $1)",
+        1, NULL, blockParams, NULL, NULL, 0
+    );
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        ret = malloc(strlen(ERROR) + 1);
+        strcpy(ret, ERROR);
+    } else {
+        ret = malloc(strlen(OK) + 1);
+        strcpy(ret, OK);
+    }
+
+    PQclear(res);
+    return ret;
+}
+
+// Fonction pour bannir un client définitivement (BAN)
+char* ban_user(PGconn* dbConn, char* admin_id, char* client_id) {
+    char *ret;
+    const char OK[] = "200/OK : Messages bloqués entre le client et le professionel définitivement";
+    const char ERROR[] = "400/ERROR : Erreur sur le banissement d'un client";
+    const char DENIED[] = "403/DENIED : Vous n'avez pas accès à cette commande";
+    const char UNDEFINED[] = "404/UNDEFINED : L'identifiant du client n'existe pas";
+
+    // Vérifier si l'utilisateur est un administrateur
+    const char* paramValues[1] = { admin_id };
+    PGresult* res = PQexecParams(
+        dbConn,
+        "SELECT status FROM chatator.client WHERE client_id = $1",
+        1, NULL, paramValues, NULL, NULL, 0
+    );
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0 || strcmp(PQgetvalue(res, 0, 0), "administrateur") != 0) {
+        ret = malloc(strlen(DENIED) + 1);
+        strcpy(ret, DENIED);
+        PQclear(res);
+        return ret;
+    }
+
+    // Bannir le client définitivement
+    const char* banParams[1] = { client_id };
+    res = PQexecParams(
+        dbConn,
+        "UPDATE chatator.client SET banni = true WHERE client_id = $1",
+        1, NULL, banParams, NULL, NULL, 0
+    );
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        ret = malloc(strlen(ERROR) + 1);
+        strcpy(ret, ERROR);
+    } else {
+        ret = malloc(strlen(OK) + 1);
+        strcpy(ret, OK);
+    }
+
+    PQclear(res);
+    return ret;
+}

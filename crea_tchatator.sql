@@ -14,7 +14,7 @@ create table conversation(
 	client_id_1 varchar,
 	client_id_2 varchar,
 	bloque boolean,
-	date_deblocage timestamp,
+	date_blocage timestamp,
 	constraint conversation_pk primary key (client_id_1,client_id_2),
 	constraint conversation_fk_1 foreign key (client_id_1) references client(client_id),
 	constraint conversation_fk_2 foreign key (client_id_2) references client(client_id)

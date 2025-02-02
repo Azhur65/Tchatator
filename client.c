@@ -13,27 +13,92 @@
 #define MAX_API_KEY_SIZE 100
 #define MAX_TOKENS 10
 
-int menu();
-int login(int sock);
-void msg(int sock, int id_envoyeur);
-void pull(int sock, int id_client);
-void history(int sock, int id_client);
-void history(int sock, int id_client);
-void modify(int sock);
-void block(int sock, int id_client);
-void timeout(int sock);
-void ban(int sock);
+int login();
+void msg(int id_envoyeur);
+void pull(int id_client);
+void history(int id_client);
+void history(int id_client);
+void modify();
+void block(int id_client);
+void timeout();
+void ban();
 
 
 int main() {
-    int sock, ret;
-    struct sockaddr_in server_addr;
     char buffer[BUFFER_SIZE];
     bool connecte = false;
     int id_client = 0;
     int reponse;
     
-// Create socket
+
+    // Communication bidirectionnelle
+    while (1) {
+        int reponse;
+
+        printf("1 : LOGIN\n2 : MSG\n3 : PULL\n4 : HISTORY\n5 : MODIFY\n6 : BLOCK\n7 : TIMEOUT\n8 : BAN\nQue voulez vous faire ? : \n");
+        scanf(" %d",&reponse);
+        fflush(stdin);
+
+        switch(reponse){
+            case 1 :
+                login();
+                break;
+            case 2 :
+                msg(id_client);
+                break;
+            case 3 :
+                pull(id_client);
+                break;
+            case 4 :
+                history(id_client);
+                break;
+            case 5 :
+                modify();
+                break;
+            case 6 :
+                block(id_client);
+                break;
+            case 7 :
+                timeout();
+                break;
+            case 8 :
+                ban();
+                break;
+            default :
+                printf("Choix inconnu");
+        }
+    }
+
+
+    return 0;
+}
+
+int login() {
+    char api_key[MAX_API_KEY_SIZE];
+    char buffer[BUFFER_SIZE];
+    char request[BUFFER_SIZE];
+    int client_id;
+
+    struct sockaddr_in server_addr;
+    int sock, res;
+
+    // Demande de la clé API à l'utilisateur
+    printf("Veuillez entrer votre clé API : ");
+    scanf("%s", api_key);
+
+    // Retirer le saut de ligne si présent
+    size_t len = strlen(api_key);
+    if (api_key[len - 1] == '\n') {
+        api_key[len - 1] = '\0';
+    }
+
+    // Ensure that the formatted string fits within the request buffer
+    if (snprintf(request, BUFFER_SIZE, "LOGIN %s", api_key) >= BUFFER_SIZE) {
+        fprintf(stderr, "Erreur : la clé API est trop longue.\n");
+        return -1;  // Return error if the formatted string exceeds the buffer size
+    }
+
+    // Create socket
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
         perror("Error creating socket");
@@ -50,86 +115,14 @@ int main() {
     }
 
     // Connect to the server
-    ret = connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
-    if (ret < 0) {
+    res = connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    if (res < 0) {
         perror("Error connecting to server");
         close(sock);
         exit(1);
     }
 
     printf("Connected to server...\n");
-
-    // Communication bidirectionnelle
-    while (1) {
-        reponse = menu();
-
-        switch(reponse){
-            case 1 :
-                login(sock);
-                break;
-            case 2 :
-                msg(sock, id_client);
-                break;
-            case 3 :
-                pull(sock, id_client);
-                break;
-            case 4 :
-                history(sock, id_client);
-                break;
-            case 5 :
-                modify(sock);
-                break;
-            case 6 :
-                block(sock, id_client);
-                break;
-            case 7 :
-                timeout(sock);
-                break;
-            case 8 :
-                ban(sock);
-                break;
-            default :
-                printf("Choix inconnu");
-        }
-    }
-
-    // Fermer la connexion
-    close(sock);
-
-    return 0;
-}
-
-int menu(){
-    int reponse;
-
-    printf("1 : LOGIN\n2 : MSG\n3 : PULL\n4 : HISTORY\n5 : MODIFY\n6 : BLOCK\n7 : TIMEOUT\n8 : BAN\nQue voulez vous faire ? : \n");
-    scanf(" %d",&reponse);
-    fflush(stdin);
-    printf("check");
-    return reponse;
-}
-
-int login(int sock) {
-    char api_key[MAX_API_KEY_SIZE];
-    char buffer[BUFFER_SIZE];
-    char request[BUFFER_SIZE];
-    int client_id;
-
-    // Demande de la clé API à l'utilisateur
-    printf("Veuillez entrer votre clé API : ");
-    fgets(api_key, MAX_API_KEY_SIZE, stdin);
-
-    // Retirer le saut de ligne si présent
-    size_t len = strlen(api_key);
-    if (api_key[len - 1] == '\n') {
-        api_key[len - 1] = '\0';
-    }
-
-    // Ensure that the formatted string fits within the request buffer
-    if (snprintf(request, BUFFER_SIZE, "LOGIN %s", api_key) >= BUFFER_SIZE) {
-        fprintf(stderr, "Erreur : la clé API est trop longue.\n");
-        return -1;  // Return error if the formatted string exceeds the buffer size
-    }
 
     // Envoyer la requête au serveur
     if (send(sock, request, strlen(request), 0) < 0) {
@@ -150,15 +143,20 @@ int login(int sock) {
     client_id = atoi(buffer);
     printf("Connexion réussie, votre identifiant client est : %d\n", client_id);
 
+    // Fermer la connexion
+    close(sock);
+
     return client_id;
 }
 
 
-void msg(int sock, int id_envoyeur) {
+void msg(int id_envoyeur) {
     int id_receveur;
     char message[MAX_COMMAND_SIZE];
     char request[BUFFER_SIZE];  // Use BUFFER_SIZE for request buffer
     char server_response[BUFFER_SIZE];
+    struct sockaddr_in server_addr;
+    int sock, res;
 
     // Demande de l'identifiant du destinataire
     printf("Entrez l'identifiant du destinataire : ");
@@ -185,6 +183,31 @@ void msg(int sock, int id_envoyeur) {
     // Construire la requête "MSG <id_envoyeur>,<id_receveur>,<message>"
     snprintf(request, BUFFER_SIZE, "MSG %d,%d,%s", id_envoyeur, id_receveur, message);
 
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("Error creating socket");
+        exit(1);
+    }
+
+    // Server address configuration
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(8080);  // Port 8080
+    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
+        perror("inet_pton failed");
+        close(sock);
+        exit(1);
+    }
+
+    // Connect to the server
+    res = connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    if (res < 0) {
+        perror("Error connecting to server");
+        close(sock);
+        exit(1);
+    }
+
+    printf("Connected to server...\n");
+
     // Envoyer la requête au serveur
     if (send(sock, request, strlen(request), 0) < 0) {
         perror("Erreur lors de l'envoi du message");
@@ -200,16 +223,45 @@ void msg(int sock, int id_envoyeur) {
         server_response[ret] = '\0'; // Assurez-vous que la chaîne est terminée
         printf("Réponse du serveur : %s\n", server_response);
     }
+
+    close(sock);
 }
 
 
 
-void pull(int sock, int id_client) {
+void pull(int id_client) {
     char request[BUFFER_SIZE];
     char server_response[BUFFER_SIZE];
+    struct sockaddr_in server_addr;
+    int sock, res;
 
     // Construire la requête "PULL <id_client>"
     snprintf(request, BUFFER_SIZE, "PULL %d", id_client);
+
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("Error creating socket");
+        exit(1);
+    }
+
+    // Server address configuration
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(8080);  // Port 8080
+    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
+        perror("inet_pton failed");
+        close(sock);
+        exit(1);
+    }
+
+    // Connect to the server
+    res = connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    if (res < 0) {
+        perror("Error connecting to server");
+        close(sock);
+        exit(1);
+    }
+
+    printf("Connected to server...\n");
 
     // Envoyer la requête au serveur
     if (send(sock, request, strlen(request), 0) < 0) {
@@ -226,12 +278,16 @@ void pull(int sock, int id_client) {
         server_response[ret] = '\0'; // Assurez-vous que la chaîne est terminée
         printf("Réponse du serveur : %s\n", server_response);
     }
+
+    close(sock);
 }
 
-void history(int sock, int id_client) {
+void history(int id_client) {
     char request[BUFFER_SIZE];
     char server_response[BUFFER_SIZE];
-    char* id_autre = malloc(BUFFER_SIZE * sizeof(char));  // Dynamically allocate memory for id_autre
+    char* id_autre = malloc(BUFFER_SIZE * sizeof(char)); 
+    struct sockaddr_in server_addr;
+    int sock, res;
 
     if (id_autre == NULL) {
         perror("Erreur d'allocation mémoire");
@@ -250,6 +306,31 @@ void history(int sock, int id_client) {
 
     // Construire la requête "HISTORY <id_client> <id_autre>"
     snprintf(request, BUFFER_SIZE, "HISTORY %d %s", id_client, id_autre);
+
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("Error creating socket");
+        exit(1);
+    }
+
+    // Server address configuration
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(8080);  // Port 8080
+    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
+        perror("inet_pton failed");
+        close(sock);
+        exit(1);
+    }
+
+    // Connect to the server
+    res = connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    if (res < 0) {
+        perror("Error connecting to server");
+        close(sock);
+        exit(1);
+    }
+
+    printf("Connected to server...\n");
 
     // Envoyer la requête au serveur
     if (send(sock, request, strlen(request), 0) < 0) {
@@ -272,11 +353,13 @@ void history(int sock, int id_client) {
 }
 
 
-void modify(int sock) {
+void modify() {
     int id_message;
     char new_message[BUFFER_SIZE];
     char request[BUFFER_SIZE];
     char server_response[BUFFER_SIZE];
+    struct sockaddr_in server_addr;
+    int sock, res;
 
     // Demande de l'identifiant du message à modifier
     printf("Entrez l'identifiant du message à modifier : ");
@@ -309,6 +392,31 @@ void modify(int sock) {
     // Construire la requête "MODIFY <id_message>,<new_message>"
     snprintf(request, BUFFER_SIZE, "MODIFY %d,%s", id_message, new_message);
 
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("Error creating socket");
+        exit(1);
+    }
+
+    // Server address configuration
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(8080);  // Port 8080
+    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
+        perror("inet_pton failed");
+        close(sock);
+        exit(1);
+    }
+
+    // Connect to the server
+    res = connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    if (res < 0) {
+        perror("Error connecting to server");
+        close(sock);
+        exit(1);
+    }
+
+    printf("Connected to server...\n");
+
     // Envoyer la requête au serveur
     if (send(sock, request, strlen(request), 0) < 0) {
         perror("Erreur lors de l'envoi de la requête MODIFY");
@@ -324,14 +432,18 @@ void modify(int sock) {
         server_response[ret] = '\0'; // Assurez-vous que la chaîne est terminée
         printf("Réponse du serveur : %s\n", server_response);
     }
+
+    close(sock);
 }
 
 
 
-void block(int sock, int id_client) {
+void block(int id_client) {
     int id_autre_client;
     char request[BUFFER_SIZE];
     char server_response[BUFFER_SIZE];
+    struct sockaddr_in server_addr;
+    int sock, res;
 
     // Demande de l'identifiant du client à bloquer
     printf("Entrez l'identifiant du client à bloquer : ");
@@ -339,6 +451,31 @@ void block(int sock, int id_client) {
 
     // Construire la requête "BLOCK <id_client>,<id_autre_client>"
     snprintf(request, BUFFER_SIZE, "BLOCK %d,%d", id_client, id_autre_client);
+    
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("Error creating socket");
+        exit(1);
+    }
+
+    // Server address configuration
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(8080);  // Port 8080
+    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
+        perror("inet_pton failed");
+        close(sock);
+        exit(1);
+    }
+
+    // Connect to the server
+    res = connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    if (res < 0) {
+        perror("Error connecting to server");
+        close(sock);
+        exit(1);
+    }
+
+    printf("Connected to server...\n");
 
     // Envoyer la requête au serveur
     if (send(sock, request, strlen(request), 0) < 0) {
@@ -355,12 +492,16 @@ void block(int sock, int id_client) {
         server_response[ret] = '\0'; // Assurez-vous que la chaîne est terminée
         printf("Réponse du serveur : %s\n", server_response);
     }
+
+    close(sock);
 }
 
-void timeout(int sock) {
+void timeout() {
     int id_autre_client;
     char request[BUFFER_SIZE];
     char server_response[BUFFER_SIZE];
+    struct sockaddr_in server_addr;
+    int sock, res;
 
     // Demande de l'identifiant du client à bloquer
     printf("Entrez l'identifiant du client à bloquer : ");
@@ -368,6 +509,31 @@ void timeout(int sock) {
 
     // Construire la requête "TIMEOUT <id_client>,<id_autre_client>"
     snprintf(request, BUFFER_SIZE, "TIMEOUT %d", id_autre_client);
+
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("Error creating socket");
+        exit(1);
+    }
+
+    // Server address configuration
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(8080);  // Port 8080
+    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
+        perror("inet_pton failed");
+        close(sock);
+        exit(1);
+    }
+
+    // Connect to the server
+    res = connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    if (res < 0) {
+        perror("Error connecting to server");
+        close(sock);
+        exit(1);
+    }
+
+    printf("Connected to server...\n");
 
     // Envoyer la requête au serveur
     if (send(sock, request, strlen(request), 0) < 0) {
@@ -384,13 +550,17 @@ void timeout(int sock) {
         server_response[ret] = '\0'; // Assurez-vous que la chaîne est terminée
         printf("Réponse du serveur : %s\n", server_response);
     }
+
+    close(sock);
 }
 
 
-void ban(int sock) {
+void ban() {
     int id_autre_client;
     char request[BUFFER_SIZE];
     char server_response[BUFFER_SIZE];
+    struct sockaddr_in server_addr;
+    int sock, res;
 
     // Demande de l'identifiant du client à bannir
     printf("Entrez l'identifiant du client à bannir : ");
@@ -398,6 +568,31 @@ void ban(int sock) {
 
     // Construire la requête "BAN <id_client>,<id_autre_client>"
     snprintf(request, BUFFER_SIZE, "BAN %d", id_autre_client);
+
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("Error creating socket");
+        exit(1);
+    }
+
+    // Server address configuration
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(8080);  // Port 8080
+    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
+        perror("inet_pton failed");
+        close(sock);
+        exit(1);
+    }
+
+    // Connect to the server
+    res = connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    if (res < 0) {
+        perror("Error connecting to server");
+        close(sock);
+        exit(1);
+    }
+
+    printf("Connected to server...\n");
 
     // Envoyer la requête au serveur
     if (send(sock, request, strlen(request), 0) < 0) {
@@ -414,4 +609,6 @@ void ban(int sock) {
         server_response[ret] = '\0'; // Assurez-vous que la chaîne est terminée
         printf("Réponse du serveur : %s\n", server_response);
     }
+
+    close(sock);
 }

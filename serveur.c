@@ -10,7 +10,7 @@
 #include <stdbool.h>
 #include <time.h>
 
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 4096
 
 const int MAX_MSG_SIZE = 1000;
 
@@ -50,7 +50,7 @@ int main() {
         PQfinish(dbConn);
         exit(1);
     }
-    /*
+
     // Créer un socket
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
@@ -130,7 +130,7 @@ int main() {
 
     // Fermer la connexion et le socket
     close(cnx);
-    close(sock);*/
+    close(sock);
 
     //TEST
     printf("block\n");
@@ -324,15 +324,15 @@ void block(PGconn* dbConn, char* src, char* dest) {
 
 char* login(PGconn* dbConn, char* api_key) {
     char *ret;
-    const char OKC[] = "201/OKC : Accès client authorisé";
-    const char OKP[] = "202/OKP : Accès professionel authorisé";
-    const char OKA[] = "203/OKA : Accès administrateur authorisé";
+    const char OKC[] = "201/OKC : Accès client authorisé, ";
+    const char OKP[] = "202/OKP : Accès professionel authorisé, ";
+    const char OKA[] = "203/OKA : Accès administrateur authorisé, ";
     const char DENIED[] = "403/DENIED : Accès refusé";
 
     const char* paramValues[1] = { api_key };
     PGresult* res = PQexecParams(
         dbConn,
-        "SELECT status FROM chatator.client WHERE api_key = $1",
+        "SELECT client_id, status FROM chatator.client WHERE api_key = $1",
         1, NULL, paramValues, NULL, NULL, 0
     );
 
@@ -340,16 +340,18 @@ char* login(PGconn* dbConn, char* api_key) {
         ret = malloc(strlen(DENIED) + 1);
         strcpy(ret, DENIED);
     } else {
-        char* status = PQgetvalue(res, 0, 0);
+        char* client_id = PQgetvalue(res, 0, 0);
+        char* status = PQgetvalue(res, 0, 1);
+
         if (strcmp(status, "client") == 0) {
-            ret = malloc(strlen(OKC) + 1);
-            strcpy(ret, OKC);
+            ret = malloc(strlen(OKC) + strlen(client_id) + 1);
+            sprintf(ret, "%s%s", OKC, client_id);
         } else if (strcmp(status, "professionnel") == 0) {
-            ret = malloc(strlen(OKP) + 1);
-            strcpy(ret, OKP);
+            ret = malloc(strlen(OKP) + strlen(client_id) + 1);
+            sprintf(ret, "%s%s", OKP, client_id);
         } else if (strcmp(status, "administrateur") == 0) {
-            ret = malloc(strlen(OKA) + 1);
-            strcpy(ret, OKA);
+            ret = malloc(strlen(OKA) + strlen(client_id) + 1);
+            sprintf(ret, "%s%s", OKA, client_id);
         } else {
             ret = malloc(strlen(DENIED) + 1);
             strcpy(ret, DENIED);
@@ -362,13 +364,13 @@ char* login(PGconn* dbConn, char* api_key) {
 
 char* pull_messages(PGconn* dbConn, char* client_id) {
     char *ret;
-    const char OK[] = "200/OK : Tous les messages ont été reçus avec succès";
+    const char OK[] = "200/OK : Tous les messages ont été reçus avec succès\n";
     const char ERROR[] = "400/ERROR : Tous les messages n'ont pas pus être receptionnés";
 
     const char* paramValues[1] = { client_id };
     PGresult* res = PQexecParams(
         dbConn,
-        "SELECT message FROM chatator.message WHERE receveur = $1 AND lu = false",
+        "SELECT message_id, message FROM chatator.message WHERE receveur = $1 AND lu = false",
         1, NULL, paramValues, NULL, NULL, 0
     );
 
@@ -376,8 +378,21 @@ char* pull_messages(PGconn* dbConn, char* client_id) {
         ret = malloc(strlen(ERROR) + 1);
         strcpy(ret, ERROR);
     } else {
-        ret = malloc(strlen(OK) + 1);
-        strcpy(ret, OK);
+        // Construire la réponse avec les messages
+        char response[BUFFER_SIZE];
+        strcpy(response, OK);
+
+        for (int i = 0; i < PQntuples(res); i++) {
+            char message_line[512];
+            sprintf(message_line, "%s, %s\n",
+                PQgetvalue(res, i, 0),  // message_id
+                PQgetvalue(res, i, 1)   // message
+            );
+            strcat(response, message_line);
+        }
+
+        ret = malloc(strlen(response) + 1);
+        strcpy(ret, response);
     }
 
     PQclear(res);
@@ -386,7 +401,7 @@ char* pull_messages(PGconn* dbConn, char* client_id) {
 
 char* get_history(PGconn* dbConn, char* client_id, char* target_id, char* last_message_id, int limit) {
     char *ret;
-    const char OK[] = "200/OK : L'Historique à bien été reçu";
+    const char OK[] = "200/OK : L'Historique à bien été reçu\n";
     const char ERROR[] = "400/ERROR : L'Historique n'a pas pu être receptionné";
     const char UNDEFINED[] = "404/UNDEFINED : L'identifiant du client est incorrect";
 
@@ -411,16 +426,14 @@ char* get_history(PGconn* dbConn, char* client_id, char* target_id, char* last_m
     if (last_message_id == NULL || strcmp(last_message_id, "") == 0) {
         // Récupérer les derniers messages
         sprintf(query,
-            "SELECT message_id, message, envoyeur, receveur, date, modifie "
-            "FROM chatator.message "
+            "SELECT message_id, message FROM chatator.message "
             "WHERE (envoyeur = $1 AND receveur = $2) OR (envoyeur = $2 AND receveur = $1) "
             "ORDER BY date DESC "
             "LIMIT %d", limit);
     } else {
         // Récupérer les messages précédant last_message_id
         sprintf(query,
-            "SELECT message_id, message, envoyeur, receveur, date, modifie "
-            "FROM chatator.message "
+            "SELECT message_id, message FROM chatator.message "
             "WHERE ((envoyeur = $1 AND receveur = $2) OR (envoyeur = $2 AND receveur = $1)) "
             "AND message_id < %s "
             "ORDER BY date DESC "
@@ -444,16 +457,11 @@ char* get_history(PGconn* dbConn, char* client_id, char* target_id, char* last_m
         // Construire la réponse avec les messages
         char response[BUFFER_SIZE];
         strcpy(response, OK);
-        strcat(response, "\n");
 
         for (int i = 0; i < PQntuples(res); i++) {
             char message_line[512];
-            sprintf(message_line, "Message ID: %s, From: %s, To: %s, Date: %s, Modified: %s, Content: %s\n",
+            sprintf(message_line, "%s, %s\n",
                 PQgetvalue(res, i, 0),  // message_id
-                PQgetvalue(res, i, 2),  // envoyeur
-                PQgetvalue(res, i, 3),  // receveur
-                PQgetvalue(res, i, 4),  // date
-                PQgetvalue(res, i, 5),  // modifie
                 PQgetvalue(res, i, 1)   // message
             );
             strcat(response, message_line);

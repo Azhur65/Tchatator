@@ -5,7 +5,7 @@
     - **203/OKA** : Accès administrateur authorisé <*id_client*>
     - **403/DENIED** : Accès refusé
 
-- **MSG** : \<*id_client*>,\<*message*> pour envoyer un message à une personne <br>
+- **MSG** : \<*id_client_src*>,\<*id_client_dest*>,\<*message*> pour envoyer un message à une personne <br>
     Réponses possibles 
     - **200/OK** : Message envoyé
     - **400/ERROR** : Le message n'a pas été envoyé
@@ -16,12 +16,12 @@
 
 - **PULL** : permet de recevoir les messages non lus <br>
     Réponses possibles
-    - **200/OK** : Tous les messages ont été reçus avec succès
+    - **200/OK** : Tous les messages ont été reçus avec succès\n<*id_message_1*>, <*message_1*>\n<*id_message_n*>, <*message_n*>
     - **400/ERROR** : Tous les messages n'ont pas pus être receptionnés
 
-- **HISTORY** : \<*id_client*> permet de recevoir un historique des messages avec un client <br>
+- **HISTORY** : <*id_client_src*>,\<*id_client_dest*> permet de recevoir un historique des messages avec un client <br>
     Réponses possibles:
-    - **200/OK** : L'Historique à bien été reçu
+    - **200/OK** : L'Historique à bien été reçu\n<*id_message\_1*>, <*message_1*>\n ... \n <*id_message\_20*>, <*message_20*>
     - **400/ERROR** : L'Historique n'a pas pu être receptionné
     - **404/UNDEFINED** : L'identifiant du client est incorrect
 
